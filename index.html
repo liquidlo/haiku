@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Хайку на метке</title>
+<meta name="description" content="Композер и читалка хайку для NFC-меток NTAG216 со счётчиком прочтений">
+<style>
+:root{
+  --bg:#f6f1e7; --fg:#1d1a16; --muted:#6f685c; --line:#d9d0bf; --accent:#8a4b2a; --card:#fffdf8; --mono:#2f2a23; --ok:#2f6b3a; --warn:#a33b2b;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ --bg:#15130f; --fg:#efe8da; --muted:#9a9184; --line:#33302a; --accent:#d9a06f; --card:#1e1b16; --mono:#e4ddcf; --ok:#7fc48a; --warn:#e07a68; }
+}
+:root[data-theme="dark"]{ --bg:#15130f; --fg:#efe8da; --muted:#9a9184; --line:#33302a; --accent:#d9a06f; --card:#1e1b16; --mono:#e4ddcf; --ok:#7fc48a; --warn:#e07a68; }
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg)}
+body{font-family:Georgia,"Times New Roman",serif;line-height:1.5;padding:0 16px}
+main{max-width:640px;margin:0 auto;padding:40px 0 64px}
+h1{font-weight:normal;font-size:1.4rem;margin:0 0 24px;letter-spacing:.02em}
+label{display:block;font-size:.85rem;color:var(--muted);margin:18px 0 6px}
+textarea,input[type=text]{width:100%;font:inherit;font-size:1.1rem;color:var(--fg);background:var(--card);border:1px solid var(--line);border-radius:6px;padding:10px 12px}
+textarea{min-height:7em;resize:vertical;line-height:1.6}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.check{font-size:.9rem;color:var(--muted);margin-top:14px;display:flex;gap:8px;align-items:flex-start}
+.check input{margin-top:5px}
+.out{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:12px 14px;margin-top:10px;word-break:break-all}
+code,pre{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.9rem;color:var(--mono)}
+pre{margin:6px 0 0;white-space:pre-wrap}
+.meter{font-size:.85rem;color:var(--muted);margin-top:8px}
+.meter.bad{color:var(--warn)}
+.meter.good{color:var(--ok)}
+button{font:inherit;font-size:.9rem;padding:8px 14px;border-radius:6px;border:1px solid var(--line);background:var(--card);color:var(--fg);cursor:pointer}
+button:active{transform:translateY(1px)}
+ol{padding-left:1.2em}
+ol li{margin:10px 0}
+.small{font-size:.85rem;color:var(--muted)}
+h2{font-weight:normal;font-size:1.05rem;margin:36px 0 6px;color:var(--accent)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;font-size:.95rem;margin-top:8px}
+.kv code{font-size:1rem}
+
+/* читалка */
+.reader{min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:48px 0}
+.haiku{font-size:clamp(1.5rem,6vw,2.3rem);line-height:1.5;white-space:pre-wrap;margin:0}
+.author{margin-top:28px;color:var(--muted);font-size:1rem}
+.count{margin-top:56px;color:var(--muted);font-size:.9rem;letter-spacing:.04em}
+.count b{color:var(--accent);font-weight:normal;font-size:1.4rem;display:block;margin-top:4px}
+.back{margin-top:40px;font-size:.8rem}
+a{color:var(--accent)}
+</style>
+</head>
+<body>
+<main id="app"></main>
+<script>
+(function(){
+  var LIMIT = 888;           // байт пользовательской памяти NTAG216
+  var NDEF_HEAD = 7;         // 03 LL D1 01 PL 55 <prefix>  до начала URL без https://
+  var TERM = 1;              // FE терминатор TLV
+  var PLACEHOLDER = '000000';
+
+  function b64url(bytes){
+    var s=''; for(var i=0;i<bytes.length;i++) s+=String.fromCharCode(bytes[i]);
+    return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  }
+  function unb64url(str){
+    str=str.replace(/-/g,'+').replace(/_/g,'/'); while(str.length%4) str+='=';
+    var s=atob(str), a=new Uint8Array(s.length); for(var i=0;i<s.length;i++) a[i]=s.charCodeAt(i); return a;
+  }
+  var enc=new TextEncoder(), dec=new TextDecoder();
+  function pack(text,author){ return b64url(enc.encode(author?text+'\n~'+author:text)); }
+  function unpack(h){
+    var t=dec.decode(unb64url(h)), i=t.lastIndexOf('\n~');
+    return i>=0 ? {text:t.slice(0,i), author:t.slice(i+2)} : {text:t, author:''};
+  }
+  function hex(n){ return (n<16?'0':'')+n.toString(16).toUpperCase(); }
+  function esc(s){ return s.replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+
+  var app=document.getElementById('app');
+  var params=new URLSearchParams(location.hash.slice(1));
+
+  if(params.get('h')){ reader(); } else { composer(); }
+
+  function reader(){
+    var d; try{ d=unpack(params.get('h')); }catch(e){ d={text:'Метка повреждена или записана не этой страницей.',author:''}; }
+    var n=params.get('n')||'', count=/^[0-9A-Fa-f]{1,6}$/.test(n)?parseInt(n,16):null;
+    document.title=d.text.split('\n')[0]||'Хайку';
+    var countHtml;
+    if(count===null) countHtml='<div class="count">счётчик не передан</div>';
+    else if(count===0) countHtml='<div class="count">предпросмотр<b>ещё никто не читал</b></div>';
+    else countHtml='<div class="count">прочтение<b>№ '+count+'</b></div>';
+    app.innerHTML='<div class="reader"><p class="haiku">'+esc(d.text)+'</p>'+
+      (d.author?'<div class="author">'+esc(d.author)+'</div>':'')+countHtml+
+      '<div class="back small"><a href="'+location.pathname+'">написать своё</a></div></div>';
+  }
+
+  function composer(){
+    var defaultBase = (location.protocol==='file:'||/^(localhost|127\.0\.0\.1)$/.test(location.hostname))
+      ? 'https://liquidlo.github.io/haiku/' : location.origin+location.pathname;
+    app.innerHTML=
+      '<h1>Хайку на метке</h1>'+
+      '<label>Хайку (три строки)</label><textarea id="t" placeholder="старый пруд\nпрыгнула лягушка\nвсплеск воды"></textarea>'+
+      '<label>Подпись (необязательно)</label><input type="text" id="a" placeholder="Басё">'+
+      '<label>Адрес читалки</label><input type="text" id="base">'+
+      '<label class="check"><input type="checkbox" id="abbr" checked><span>Приложение записало URL с сокращённым префиксом <code>https://</code> (так делает NFC Tools). Если в дампе метки видно буквы <code>h t t p s</code>, снимите галочку.</span></label>'+
+      '<h2>1. URL для метки</h2><div class="out"><code id="url"></code></div>'+
+      '<div class="row" style="margin-top:8px"><button id="copy">Скопировать URL</button><button id="prev">Открыть предпросмотр</button></div>'+
+      '<div class="meter" id="meter"></div>'+
+      '<h2>2. Запись и счётчик</h2>'+
+      '<ol>'+
+      '<li>В NFC Tools: <i>Write → Add a record → URL</i>, вставить URL, <i>Write</i>, приложить метку.</li>'+
+      '<li>Там же <i>Other → Advanced NFC commands</i>. Сначала прочитать настройки: <code>30 E3</code>. Ответ начинается с <code>04 00 00 FF</code> на чистой метке.</li>'+
+      '<li>Включить зеркало счётчика в вычисленное место:<pre id="cmd0"></pre></li>'+
+      '<li>Включить сам счётчик:<pre>A2 E4 10 05 00 00</pre></li>'+
+      '<li>Приложить метку к iPhone без приложений: должен выехать баннер, а страница показать номер прочтения. Каждое прикладывание увеличивает его на один.</li>'+
+      '</ol>'+
+      '<div class="kv"><span class="small">Байт до плейсхолдера</span><code id="off"></code><span class="small">MIRROR_PAGE</span><code id="pg"></code><span class="small">MIRROR_BYTE</span><code id="bt"></code></div>'+
+      '<p class="small">Счётчик живёт в самой метке и увеличивается на каждое чтение; метка подставляет его в URL шестью шестнадцатеричными цифрами на место <code>000000</code>. Страница ничего не хранит и не отправляет.</p>';
+
+    var t=document.getElementById('t'), a=document.getElementById('a'), base=document.getElementById('base'), abbr=document.getElementById('abbr');
+    base.value=defaultBase;
+    try{ var saved=JSON.parse(localStorage.getItem('haiku-draft')||'null'); if(saved){ t.value=saved.t||''; a.value=saved.a||''; if(saved.base) base.value=saved.base; } }catch(e){}
+
+    function build(){
+      var text=t.value.replace(/\r/g,'').replace(/\n{2,}/g,'\n').trim(), author=a.value.trim();
+      var b=base.value.trim(); if(b && !/[\/#]$/.test(b)) b+='/';
+      var url=b+'#h='+(text?pack(text,author):'')+'&n='+PLACEHOLDER;
+      document.getElementById('url').textContent=url;
+      var urlBytes=enc.encode(url).length;
+      var afterScheme = abbr.checked ? url.replace(/^https:\/\//,'') : url;
+      var payload = enc.encode(afterScheme).length + 1;        // + байт префикса
+      var total = NDEF_HEAD + enc.encode(afterScheme).length + TERM;
+      var k = enc.encode(afterScheme.slice(0, afterScheme.lastIndexOf(PLACEHOLDER))).length;
+      var off = NDEF_HEAD + k, page = 4 + Math.floor(off/4), byte = off%4;
+      var mirror = 0x80 | (byte<<4) | 0x04;
+      document.getElementById('off').textContent=off;
+      document.getElementById('pg').textContent=hex(page)+' (стр. '+page+')';
+      document.getElementById('bt').textContent=byte;
+      document.getElementById('cmd0').textContent='A2 E3 '+hex(mirror)+' 00 '+hex(page)+' FF';
+      var m=document.getElementById('meter');
+      var ok = total<=LIMIT && payload<=255 && text;
+      m.className='meter '+(text?(ok?'good':'bad'):'');
+      m.textContent = text ? (total+' из '+LIMIT+' байт памяти метки'+(ok?'':', не влезает: сократите текст или адрес')) : 'введите хайку';
+      try{ localStorage.setItem('haiku-draft',JSON.stringify({t:t.value,a:a.value,base:base.value})); }catch(e){}
+      return url;
+    }
+    [t,a,base,abbr].forEach(function(el){ el.addEventListener('input',build); });
+    document.getElementById('copy').onclick=function(){
+      var u=build(); var btn=this;
+      (navigator.clipboard?navigator.clipboard.writeText(u):Promise.reject()).then(function(){ btn.textContent='Скопировано'; setTimeout(function(){btn.textContent='Скопировать URL';},1500); },
+        function(){ window.prompt('Скопируйте URL', u); });
+    };
+    document.getElementById('prev').onclick=function(){ var u=build(); location.href=location.pathname+u.slice(u.indexOf('#')); location.reload(); };
+    build();
+  }
+  window.addEventListener('hashchange',function(){ location.reload(); });
+})();
+</script>
+</body>
+</html>
