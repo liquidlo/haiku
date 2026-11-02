@@ -1,6 +1,6 @@
 // Офлайн-читалка: страница кладётся в кэш при первом открытии,
 // дальше отдаётся из кэша, а сеть обновляет копию в фоне.
-var CACHE = 'haiku-v1';
+var CACHE = 'haiku-v2';
 var PAGE = new URL('./', self.location).pathname;
 self.addEventListener('install', function(e){
   e.waitUntil(caches.open(CACHE).then(function(c){ return c.addAll([PAGE, PAGE+'index.html']); }).then(function(){ return self.skipWaiting(); }));

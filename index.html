@@ -4,11 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Хайку на метке</title>
-<meta name="description" content="Композер и читалка хайку для NFC-меток NTAG216 со счётчиком прочтений">
+<meta name="description" content="Композер хайку для NFC-меток NTAG216: sms-ссылка для iPhone, текстовая запись и счётчик прочтений внутри текста">
 <style>
-:root{
-  --bg:#f6f1e7; --fg:#1d1a16; --muted:#6f685c; --line:#d9d0bf; --accent:#8a4b2a; --card:#fffdf8; --mono:#2f2a23; --ok:#2f6b3a; --warn:#a33b2b;
-}
+:root{ --bg:#f6f1e7; --fg:#1d1a16; --muted:#6f685c; --line:#d9d0bf; --accent:#8a4b2a; --card:#fffdf8; --mono:#2f2a23; --ok:#2f6b3a; --warn:#a33b2b; }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){ --bg:#15130f; --fg:#efe8da; --muted:#9a9184; --line:#33302a; --accent:#d9a06f; --card:#1e1b16; --mono:#e4ddcf; --ok:#7fc48a; --warn:#e07a68; }
 }
@@ -17,149 +15,120 @@
 html,body{margin:0;background:var(--bg);color:var(--fg)}
 body{font-family:Georgia,"Times New Roman",serif;line-height:1.5;padding:0 16px}
 main{max-width:640px;margin:0 auto;padding:40px 0 64px}
-h1{font-weight:normal;font-size:1.4rem;margin:0 0 24px;letter-spacing:.02em}
+h1{font-weight:normal;font-size:1.4rem;margin:0 0 6px;letter-spacing:.02em}
+.lead{color:var(--muted);margin:0 0 20px;font-size:.95rem}
 label{display:block;font-size:.85rem;color:var(--muted);margin:18px 0 6px}
 textarea,input[type=text]{width:100%;font:inherit;font-size:1.1rem;color:var(--fg);background:var(--card);border:1px solid var(--line);border-radius:6px;padding:10px 12px}
 textarea{min-height:7em;resize:vertical;line-height:1.6}
-.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
 .check{font-size:.9rem;color:var(--muted);margin-top:14px;display:flex;gap:8px;align-items:flex-start}
 .check input{margin-top:5px}
-.out{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:12px 14px;margin-top:10px;word-break:break-all}
-code,pre{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.9rem;color:var(--mono)}
+.out{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:12px 14px;margin-top:10px;word-break:break-all;white-space:pre-wrap}
+code,pre,.out{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.9rem;color:var(--mono)}
 pre{margin:6px 0 0;white-space:pre-wrap}
 .meter{font-size:.85rem;color:var(--muted);margin-top:8px}
-.meter.bad{color:var(--warn)}
-.meter.good{color:var(--ok)}
-button{font:inherit;font-size:.9rem;padding:8px 14px;border-radius:6px;border:1px solid var(--line);background:var(--card);color:var(--fg);cursor:pointer}
+.meter.bad{color:var(--warn)} .meter.good{color:var(--ok)}
+button,a.btn{font:inherit;font-size:.9rem;padding:8px 14px;border-radius:6px;border:1px solid var(--line);background:var(--card);color:var(--fg);cursor:pointer;text-decoration:none;display:inline-block}
 button:active{transform:translateY(1px)}
-ol{padding-left:1.2em}
-ol li{margin:10px 0}
+ol{padding-left:1.2em} ol li{margin:10px 0}
 .small{font-size:.85rem;color:var(--muted)}
 h2{font-weight:normal;font-size:1.05rem;margin:36px 0 6px;color:var(--accent)}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;font-size:.95rem;margin-top:8px}
 .kv code{font-size:1rem}
-
-/* читалка */
-.reader{min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:48px 0}
-.haiku{font-size:clamp(1.5rem,6vw,2.3rem);line-height:1.5;white-space:pre-wrap;margin:0}
-.author{margin-top:28px;color:var(--muted);font-size:1rem}
-.count{margin-top:56px;color:var(--muted);font-size:.9rem;letter-spacing:.04em}
-.count b{color:var(--accent);font-weight:normal;font-size:1.4rem;display:block;margin-top:4px}
-.back{margin-top:40px;font-size:.8rem}
 a{color:var(--accent)}
 </style>
 </head>
 <body>
-<main id="app"></main>
+<main>
+  <h1>Хайку на метке</h1>
+  <p class="lead">Текст хранится в самой метке. iPhone при прикладывании открывает его как черновик сообщения, без приложений и без сети. Любая NFC-читалка и Android видят его как обычный текст.</p>
+
+  <label>Хайку (три строки)</label>
+  <textarea id="t" placeholder="старый пруд&#10;прыгнула лягушка&#10;всплеск воды"></textarea>
+  <label>Подпись (необязательно)</label>
+  <input type="text" id="a" placeholder="Басё">
+
+  <label class="check"><input type="checkbox" id="cnt" checked><span>Счётчик прочтений в конце текста. Чип сам вписывает число прочтений на место <code>000000</code>, в шестнадцатеричном виде.</span></label>
+  <label class="check"><input type="checkbox" id="txt" checked><span>Вторая запись, обычный текст: для Android и NFC-читалок, и чтобы хайку читалось в дампе памяти как есть.</span></label>
+
+  <h2>1. Запись URL/URI</h2>
+  <div class="out" id="sms"></div>
+  <div class="row"><button id="copy1">Скопировать</button><a class="btn" id="try" href="#">Открыть на этом устройстве</a></div>
+
+  <h2 id="h2txt">2. Запись Text, язык ru</h2>
+  <div class="out" id="plain"></div>
+  <div class="row" id="row2"><button id="copy2">Скопировать</button></div>
+
+  <div class="meter" id="meter"></div>
+
+  <h2>3. Записать метку</h2>
+  <ol>
+    <li>NFC Tools → <i>Write → Add a record → URL/URI</i>, вставить ссылку из пункта 1 целиком, вместе с <code>sms:</code>. Не выбирать тип «SMS», он требует номер.</li>
+    <li id="step2"><i>Add a record → Text</i>, язык <code>ru</code>, вставить текст из пункта 2. Порядок важен: URL первым.</li>
+    <li>Нажать <i>Write</i>, приложить метку. Потом <i>Read</i> и убедиться, что обе записи на месте.</li>
+  </ol>
+
+  <div id="counterBlock">
+  <h2>4. Включить счётчик</h2>
+  <ol>
+    <li>NFC Tools → <i>Other → Advanced NFC commands</i>. Прочитать настройки: <code>30 E3</code>. На чистой метке ответ начинается с <code>04 00 00 FF</code>.</li>
+    <li>Направить зеркало счётчика в место <code>000000</code>:<pre id="cmd0"></pre></li>
+    <li>Включить счётчик:<pre>A2 E4 10 05 00 00</pre></li>
+    <li>Приложить метку к iPhone. В черновике сообщения внизу будет <code>№ 000001</code>, и число растёт с каждым прикладыванием.</li>
+  </ol>
+  <div class="kv"><span class="small">Байт до плейсхолдера</span><code id="off"></code><span class="small">MIRROR_PAGE</span><code id="pg"></code><span class="small">MIRROR_BYTE</span><code id="bt"></code><span class="small">Формат записи URL</span><code id="fmt"></code></div>
+  <p class="small">Расчёт предполагает, что приложение записало ссылку с префиксом <code>00</code> (без сокращения, у <code>sms:</code> его нет) и стандартный заголовок NDEF. Если счётчик появится не на месте, сверьте дамп памяти: байты <code>30 30 30 30 30 30</code> должны лежать в указанной странице.</p>
+  </div>
+</main>
 <script>
 (function(){
-  var LIMIT = 888;           // байт пользовательской памяти NTAG216
-  var TERM = 1;              // FE терминатор TLV
-  var PLACEHOLDER = '000000';
-
-  function b64url(bytes){
-    var s=''; for(var i=0;i<bytes.length;i++) s+=String.fromCharCode(bytes[i]);
-    return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
-  }
-  function unb64url(str){
-    str=str.replace(/-/g,'+').replace(/_/g,'/'); while(str.length%4) str+='=';
-    var s=atob(str), a=new Uint8Array(s.length); for(var i=0;i<s.length;i++) a[i]=s.charCodeAt(i); return a;
-  }
-  var enc=new TextEncoder(), dec=new TextDecoder();
-  function pack(text,author){ return b64url(enc.encode(author?text+'\n~'+author:text)); }
-  function unpack(h){
-    var t=dec.decode(unb64url(h)), i=t.lastIndexOf('\n~');
-    return i>=0 ? {text:t.slice(0,i), author:t.slice(i+2)} : {text:t, author:''};
-  }
+  var LIMIT = 888, TERM = 1, PH = '000000';
+  var enc = new TextEncoder();
   function hex(n){ return (n<16?'0':'')+n.toString(16).toUpperCase(); }
-  function esc(s){ return s.replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  function len(s){ return enc.encode(s).length; }
+  var $ = function(id){ return document.getElementById(id); };
+  var t=$('t'), a=$('a'), cnt=$('cnt'), txt=$('txt');
+  try{ var saved=JSON.parse(localStorage.getItem('haiku-draft2')||'null'); if(saved){ t.value=saved.t||''; a.value=saved.a||''; } }catch(e){}
 
-  var app=document.getElementById('app');
-  var params=new URLSearchParams(location.hash.slice(1));
+  // размер заголовка NDEF-записи: короткая (payload < 256) или длинная
+  function recHead(payload){ return payload < 256 ? 4 : 7; }
 
-  if(params.get('h')){ reader(); } else { composer(); }
+  function build(){
+    var text = t.value.replace(/\r/g,'').replace(/\n{2,}/g,'\n').trim(), author = a.value.trim();
+    var body = text + (author ? '\n~' + author : '');
+    var smsBody = body + (cnt.checked ? '\n\n№ ' + PH : '');
+    var uri = 'sms:?&body=' + encodeURIComponent(smsBody).replace(/%0A/g,'%0A');
+    $('sms').textContent = uri;
+    $('try').href = uri;
+    $('plain').textContent = body;
+    $('h2txt').style.display = $('plain').style.display = $('row2').style.display = $('step2').style.display = txt.checked ? '' : 'none';
+    $('counterBlock').style.display = cnt.checked ? '' : 'none';
 
-  function reader(){
-    var d; try{ d=unpack(params.get('h')); }catch(e){ d={text:'Метка повреждена или записана не этой страницей.',author:''}; }
-    var n=params.get('n')||'', count=/^[0-9A-Fa-f]{1,6}$/.test(n)?parseInt(n,16):null;
-    document.title=d.text.split('\n')[0]||'Хайку';
-    var countHtml;
-    if(count===null) countHtml='<div class="count">счётчик не передан</div>';
-    else if(count===0) countHtml='<div class="count">предпросмотр<b>ещё никто не читал</b></div>';
-    else countHtml='<div class="count">прочтение<b>№ '+count+'</b></div>';
-    app.innerHTML='<div class="reader"><p class="haiku">'+esc(d.text)+'</p>'+
-      (d.author?'<div class="author">'+esc(d.author)+'</div>':'')+countHtml+
-      '<div class="back small"><a href="'+location.pathname+'">написать своё</a></div></div>';
+    var p1 = 1 + len(uri);                                  // префикс 00 + URI
+    var r1 = recHead(p1) + p1;
+    var p2 = txt.checked && text ? 3 + len(body) : 0;       // статус + "ru" + текст
+    var r2 = p2 ? recHead(p2) + p2 : 0;
+    var ndef = r1 + r2, tlv = ndef < 255 ? 2 : 4;
+    var total = tlv + ndef + TERM;
+
+    var k = len(uri.slice(0, uri.lastIndexOf(PH)));
+    var off = tlv + recHead(p1) + 1 + k, page = 4 + Math.floor(off/4), byte = off % 4;
+    $('off').textContent = off; $('pg').textContent = hex(page)+' (стр. '+page+')'; $('bt').textContent = byte;
+    $('fmt').textContent = recHead(p1)===4 ? 'короткая (SR)' : 'длинная, payload '+p1+' байт';
+    $('cmd0').textContent = 'A2 E3 ' + hex(0x80 | (byte<<4) | 0x04) + ' 00 ' + hex(page) + ' FF';
+
+    var m = $('meter'), ok = text && total <= LIMIT && page <= 225;
+    m.className = 'meter ' + (text ? (ok ? 'good' : 'bad') : '');
+    m.textContent = text ? total + ' из ' + LIMIT + ' байт памяти метки' + (ok ? '' : ', не влезает: сократите текст') : 'введите хайку';
+    try{ localStorage.setItem('haiku-draft2', JSON.stringify({t:t.value, a:a.value})); }catch(e){}
   }
-
-  function composer(){
-    var defaultBase = (location.protocol==='file:'||/^(localhost|127\.0\.0\.1)$/.test(location.hostname))
-      ? 'https://antonsimanenko.com/haiku/' : location.origin+location.pathname;
-    app.innerHTML=
-      '<h1>Хайку на метке</h1>'+
-      '<label>Хайку (три строки)</label><textarea id="t" placeholder="старый пруд\nпрыгнула лягушка\nвсплеск воды"></textarea>'+
-      '<label>Подпись (необязательно)</label><input type="text" id="a" placeholder="Басё">'+
-      '<label>Адрес читалки</label><input type="text" id="base">'+
-      '<label class="check"><input type="checkbox" id="abbr" checked><span>Приложение записало URL с сокращённым префиксом <code>https://</code> (так делает NFC Tools). Если в дампе метки видно буквы <code>h t t p s</code>, снимите галочку.</span></label>'+
-      '<label class="check"><input type="checkbox" id="txt" checked><span>Дублировать хайку второй записью, обычным текстом. Его покажет любое NFC-приложение и он виден в памяти метки как есть, без этой страницы.</span></label>'+
-      '<h2>1. URL для метки</h2><div class="out"><code id="url"></code></div>'+
-      '<div class="row" style="margin-top:8px"><button id="copy">Скопировать URL</button><button id="prev">Открыть предпросмотр</button></div>'+
-      '<div class="meter" id="meter"></div>'+
-      '<h2>2. Запись и счётчик</h2>'+
-      '<ol>'+
-      '<li>В NFC Tools: <i>Write → Add a record → URL</i>, вставить URL. <span id="txtstep">Затем <i>Add a record → Text</i>, язык <code>ru</code>, вставить сам текст хайку (с подписью после <code>~</code>, как в <code>h=</code>). Порядок важен: URL первым.</span> Нажать <i>Write</i>, приложить метку.</li>'+
-      '<li>Там же <i>Other → Advanced NFC commands</i>. Сначала прочитать настройки: <code>30 E3</code>. Ответ начинается с <code>04 00 00 FF</code> на чистой метке.</li>'+
-      '<li>Включить зеркало счётчика в вычисленное место:<pre id="cmd0"></pre></li>'+
-      '<li>Включить сам счётчик:<pre>A2 E4 10 05 00 00</pre></li>'+
-      '<li>Приложить метку к iPhone без приложений: должен выехать баннер, а страница показать номер прочтения. Каждое прикладывание увеличивает его на один.</li>'+
-      '</ol>'+
-      '<div class="kv"><span class="small">Байт до плейсхолдера</span><code id="off"></code><span class="small">MIRROR_PAGE</span><code id="pg"></code><span class="small">MIRROR_BYTE</span><code id="bt"></code></div>'+
-      '<p class="small">Текст хайку хранится в самой метке дважды: внутри URL после <code>h=</code> (base64 от UTF-8) и, если включено, отдельной текстовой записью. Страница только раскодирует URL: часть после <code>#</code> браузер не отправляет на сервер, а после первого открытия читалка работает и без интернета. Счётчик живёт в самой метке и увеличивается на каждое чтение; метка подставляет его в URL шестью шестнадцатеричными цифрами на место <code>000000</code>.</p>';
-
-    var t=document.getElementById('t'), a=document.getElementById('a'), base=document.getElementById('base'), abbr=document.getElementById('abbr'), txt=document.getElementById('txt');
-    base.value=defaultBase;
-    try{ var saved=JSON.parse(localStorage.getItem('haiku-draft')||'null'); if(saved){ t.value=saved.t||''; a.value=saved.a||''; if(saved.base) base.value=saved.base; } }catch(e){}
-
-    function build(){
-      var text=t.value.replace(/\r/g,'').replace(/\n{2,}/g,'\n').trim(), author=a.value.trim();
-      var b=base.value.trim(); if(b && !/[\/#]$/.test(b)) b+='/';
-      var url=b+'#h='+(text?pack(text,author):'')+'&n='+PLACEHOLDER;
-      document.getElementById('url').textContent=url;
-      var afterScheme = abbr.checked ? url.replace(/^https:\/\//,'') : url;
-      var urlPayload = enc.encode(afterScheme).length + 1;          // байт префикса + URL
-      var rec1 = 4 + urlPayload;                                    // заголовок 4 байта (короткая запись)
-      var txtBody = text ? (author ? text+'\n~'+author : text) : '';
-      var txtPayload = txt.checked && text ? 3 + enc.encode(txtBody).length : 0;   // статус + "ru" + текст
-      var rec2 = txtPayload ? 4 + txtPayload : 0;
-      var ndef = rec1 + rec2;
-      var tlvHead = ndef < 255 ? 2 : 4;                             // 03 LL  либо  03 FF LL LL
-      var total = tlvHead + ndef + TERM;
-      var k = enc.encode(afterScheme.slice(0, afterScheme.lastIndexOf(PLACEHOLDER))).length;
-      var off = tlvHead + 5 + k, page = 4 + Math.floor(off/4), byte = off%4;
-      var mirror = 0x80 | (byte<<4) | 0x04;
-      document.getElementById('txtstep').style.display = txt.checked ? '' : 'none';
-      document.getElementById('off').textContent=off;
-      document.getElementById('pg').textContent=hex(page)+' (стр. '+page+')';
-      document.getElementById('bt').textContent=byte;
-      document.getElementById('cmd0').textContent='A2 E3 '+hex(mirror)+' 00 '+hex(page)+' FF';
-      var m=document.getElementById('meter');
-      var ok = total<=LIMIT && urlPayload<=255 && txtPayload<=255 && text;
-      m.className='meter '+(text?(ok?'good':'bad'):'');
-      m.textContent = text ? (total+' из '+LIMIT+' байт памяти метки'+(ok?'':', не влезает: сократите текст или адрес')) : 'введите хайку';
-      try{ localStorage.setItem('haiku-draft',JSON.stringify({t:t.value,a:a.value,base:base.value})); }catch(e){}
-      return url;
-    }
-    [t,a,base,abbr,txt].forEach(function(el){ el.addEventListener('input',build); });
-    document.getElementById('copy').onclick=function(){
-      var u=build(); var btn=this;
-      (navigator.clipboard?navigator.clipboard.writeText(u):Promise.reject()).then(function(){ btn.textContent='Скопировано'; setTimeout(function(){btn.textContent='Скопировать URL';},1500); },
-        function(){ window.prompt('Скопируйте URL', u); });
-    };
-    document.getElementById('prev').onclick=function(){ var u=build(); location.href=location.pathname+u.slice(u.indexOf('#')); location.reload(); };
-    build();
-  }
-  window.addEventListener('hashchange',function(){ location.reload(); });
-  if ('serviceWorker' in navigator && location.protocol==='https:' || /^(localhost|127\.0\.0\.1)$/.test(location.hostname)) {
+  [t,a,cnt,txt].forEach(function(el){ el.addEventListener('input', build); });
+  function copier(btn, src){ btn.onclick = function(){ var v=$(src).textContent;
+    (navigator.clipboard ? navigator.clipboard.writeText(v) : Promise.reject()).then(function(){ var o=btn.textContent; btn.textContent='Скопировано'; setTimeout(function(){ btn.textContent=o; },1500); },
+      function(){ window.prompt('Скопируйте', v); }); }; }
+  copier($('copy1'),'sms'); copier($('copy2'),'plain');
+  build();
+  if ('serviceWorker' in navigator && (location.protocol==='https:' || /^(localhost|127\.0\.0\.1)$/.test(location.hostname))) {
     navigator.serviceWorker.register('sw.js').catch(function(){});
   }
 })();
