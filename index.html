@@ -54,7 +54,6 @@ a{color:var(--accent)}
 <script>
 (function(){
   var LIMIT = 888;           // байт пользовательской памяти NTAG216
-  var NDEF_HEAD = 7;         // 03 LL D1 01 PL 55 <prefix>  до начала URL без https://
   var TERM = 1;              // FE терминатор TLV
   var PLACEHOLDER = '000000';
 
@@ -102,21 +101,22 @@ a{color:var(--accent)}
       '<label>Подпись (необязательно)</label><input type="text" id="a" placeholder="Басё">'+
       '<label>Адрес читалки</label><input type="text" id="base">'+
       '<label class="check"><input type="checkbox" id="abbr" checked><span>Приложение записало URL с сокращённым префиксом <code>https://</code> (так делает NFC Tools). Если в дампе метки видно буквы <code>h t t p s</code>, снимите галочку.</span></label>'+
+      '<label class="check"><input type="checkbox" id="txt" checked><span>Дублировать хайку второй записью, обычным текстом. Его покажет любое NFC-приложение и он виден в памяти метки как есть, без этой страницы.</span></label>'+
       '<h2>1. URL для метки</h2><div class="out"><code id="url"></code></div>'+
       '<div class="row" style="margin-top:8px"><button id="copy">Скопировать URL</button><button id="prev">Открыть предпросмотр</button></div>'+
       '<div class="meter" id="meter"></div>'+
       '<h2>2. Запись и счётчик</h2>'+
       '<ol>'+
-      '<li>В NFC Tools: <i>Write → Add a record → URL</i>, вставить URL, <i>Write</i>, приложить метку.</li>'+
+      '<li>В NFC Tools: <i>Write → Add a record → URL</i>, вставить URL. <span id="txtstep">Затем <i>Add a record → Text</i>, язык <code>ru</code>, вставить сам текст хайку (с подписью после <code>~</code>, как в <code>h=</code>). Порядок важен: URL первым.</span> Нажать <i>Write</i>, приложить метку.</li>'+
       '<li>Там же <i>Other → Advanced NFC commands</i>. Сначала прочитать настройки: <code>30 E3</code>. Ответ начинается с <code>04 00 00 FF</code> на чистой метке.</li>'+
       '<li>Включить зеркало счётчика в вычисленное место:<pre id="cmd0"></pre></li>'+
       '<li>Включить сам счётчик:<pre>A2 E4 10 05 00 00</pre></li>'+
       '<li>Приложить метку к iPhone без приложений: должен выехать баннер, а страница показать номер прочтения. Каждое прикладывание увеличивает его на один.</li>'+
       '</ol>'+
       '<div class="kv"><span class="small">Байт до плейсхолдера</span><code id="off"></code><span class="small">MIRROR_PAGE</span><code id="pg"></code><span class="small">MIRROR_BYTE</span><code id="bt"></code></div>'+
-      '<p class="small">Счётчик живёт в самой метке и увеличивается на каждое чтение; метка подставляет его в URL шестью шестнадцатеричными цифрами на место <code>000000</code>. Страница ничего не хранит и не отправляет.</p>';
+      '<p class="small">Текст хайку хранится в самой метке дважды: внутри URL после <code>h=</code> (base64 от UTF-8) и, если включено, отдельной текстовой записью. Страница только раскодирует URL и ничего не хранит и не отправляет. Счётчик живёт в самой метке и увеличивается на каждое чтение; метка подставляет его в URL шестью шестнадцатеричными цифрами на место <code>000000</code>.</p>';
 
-    var t=document.getElementById('t'), a=document.getElementById('a'), base=document.getElementById('base'), abbr=document.getElementById('abbr');
+    var t=document.getElementById('t'), a=document.getElementById('a'), base=document.getElementById('base'), abbr=document.getElementById('abbr'), txt=document.getElementById('txt');
     base.value=defaultBase;
     try{ var saved=JSON.parse(localStorage.getItem('haiku-draft')||'null'); if(saved){ t.value=saved.t||''; a.value=saved.a||''; if(saved.base) base.value=saved.base; } }catch(e){}
 
@@ -125,25 +125,31 @@ a{color:var(--accent)}
       var b=base.value.trim(); if(b && !/[\/#]$/.test(b)) b+='/';
       var url=b+'#h='+(text?pack(text,author):'')+'&n='+PLACEHOLDER;
       document.getElementById('url').textContent=url;
-      var urlBytes=enc.encode(url).length;
       var afterScheme = abbr.checked ? url.replace(/^https:\/\//,'') : url;
-      var payload = enc.encode(afterScheme).length + 1;        // + байт префикса
-      var total = NDEF_HEAD + enc.encode(afterScheme).length + TERM;
+      var urlPayload = enc.encode(afterScheme).length + 1;          // байт префикса + URL
+      var rec1 = 4 + urlPayload;                                    // заголовок 4 байта (короткая запись)
+      var txtBody = text ? (author ? text+'\n~'+author : text) : '';
+      var txtPayload = txt.checked && text ? 3 + enc.encode(txtBody).length : 0;   // статус + "ru" + текст
+      var rec2 = txtPayload ? 4 + txtPayload : 0;
+      var ndef = rec1 + rec2;
+      var tlvHead = ndef < 255 ? 2 : 4;                             // 03 LL  либо  03 FF LL LL
+      var total = tlvHead + ndef + TERM;
       var k = enc.encode(afterScheme.slice(0, afterScheme.lastIndexOf(PLACEHOLDER))).length;
-      var off = NDEF_HEAD + k, page = 4 + Math.floor(off/4), byte = off%4;
+      var off = tlvHead + 5 + k, page = 4 + Math.floor(off/4), byte = off%4;
       var mirror = 0x80 | (byte<<4) | 0x04;
+      document.getElementById('txtstep').style.display = txt.checked ? '' : 'none';
       document.getElementById('off').textContent=off;
       document.getElementById('pg').textContent=hex(page)+' (стр. '+page+')';
       document.getElementById('bt').textContent=byte;
       document.getElementById('cmd0').textContent='A2 E3 '+hex(mirror)+' 00 '+hex(page)+' FF';
       var m=document.getElementById('meter');
-      var ok = total<=LIMIT && payload<=255 && text;
+      var ok = total<=LIMIT && urlPayload<=255 && txtPayload<=255 && text;
       m.className='meter '+(text?(ok?'good':'bad'):'');
       m.textContent = text ? (total+' из '+LIMIT+' байт памяти метки'+(ok?'':', не влезает: сократите текст или адрес')) : 'введите хайку';
       try{ localStorage.setItem('haiku-draft',JSON.stringify({t:t.value,a:a.value,base:base.value})); }catch(e){}
       return url;
     }
-    [t,a,base,abbr].forEach(function(el){ el.addEventListener('input',build); });
+    [t,a,base,abbr,txt].forEach(function(el){ el.addEventListener('input',build); });
     document.getElementById('copy').onclick=function(){
       var u=build(); var btn=this;
       (navigator.clipboard?navigator.clipboard.writeText(u):Promise.reject()).then(function(){ btn.textContent='Скопировано'; setTimeout(function(){btn.textContent='Скопировать URL';},1500); },
