@@ -114,7 +114,7 @@ a{color:var(--accent)}
       '<li>Приложить метку к iPhone без приложений: должен выехать баннер, а страница показать номер прочтения. Каждое прикладывание увеличивает его на один.</li>'+
       '</ol>'+
       '<div class="kv"><span class="small">Байт до плейсхолдера</span><code id="off"></code><span class="small">MIRROR_PAGE</span><code id="pg"></code><span class="small">MIRROR_BYTE</span><code id="bt"></code></div>'+
-      '<p class="small">Текст хайку хранится в самой метке дважды: внутри URL после <code>h=</code> (base64 от UTF-8) и, если включено, отдельной текстовой записью. Страница только раскодирует URL и ничего не хранит и не отправляет. Счётчик живёт в самой метке и увеличивается на каждое чтение; метка подставляет его в URL шестью шестнадцатеричными цифрами на место <code>000000</code>.</p>';
+      '<p class="small">Текст хайку хранится в самой метке дважды: внутри URL после <code>h=</code> (base64 от UTF-8) и, если включено, отдельной текстовой записью. Страница только раскодирует URL: часть после <code>#</code> браузер не отправляет на сервер, а после первого открытия читалка работает и без интернета. Счётчик живёт в самой метке и увеличивается на каждое чтение; метка подставляет его в URL шестью шестнадцатеричными цифрами на место <code>000000</code>.</p>';
 
     var t=document.getElementById('t'), a=document.getElementById('a'), base=document.getElementById('base'), abbr=document.getElementById('abbr'), txt=document.getElementById('txt');
     base.value=defaultBase;
@@ -159,6 +159,9 @@ a{color:var(--accent)}
     build();
   }
   window.addEventListener('hashchange',function(){ location.reload(); });
+  if ('serviceWorker' in navigator && location.protocol==='https:' || /^(localhost|127\.0\.0\.1)$/.test(location.hostname)) {
+    navigator.serviceWorker.register('sw.js').catch(function(){});
+  }
 })();
 </script>
 </body>
