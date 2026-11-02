@@ -51,7 +51,18 @@ a{color:var(--accent)}
   <label class="check"><input type="checkbox" id="cnt" checked><span>Счётчик прочтений в конце текста. Чип сам вписывает число прочтений на место <code>000000</code>, в шестнадцатеричном виде.</span></label>
   <label class="check"><input type="checkbox" id="txt" checked><span>Вторая запись, обычный текст: для Android и NFC-читалок, и чтобы хайку читалось в дампе памяти как есть.</span></label>
 
-  <h2>1. Запись URL/URI</h2>
+  <label>Форма sms-ссылки (iOS капризничает, подбирается на метке)</label>
+  <div class="row">
+    <select id="fmtsel" style="font:inherit;font-size:1rem;color:var(--fg);background:var(--card);border:1px solid var(--line);border-radius:6px;padding:8px 10px">
+      <option value="amp">sms:&amp;body=…  (старый формат iOS)</option>
+      <option value="num">sms:НОМЕР?body=…  (с получателем)</option>
+      <option value="qamp">sms:?&amp;body=…  (кросс-платформенный)</option>
+      <option value="q">sms:?body=…</option>
+    </select>
+    <input type="text" id="num" placeholder="номер получателя" style="width:12em;font-size:1rem">
+  </div>
+
+  <h2>1. Запись «URL / URI личные»</h2>
   <div class="out" id="sms"></div>
   <div class="row"><button id="copy1">Скопировать</button><a class="btn" id="try" href="#">Открыть на этом устройстве</a></div>
 
@@ -63,7 +74,7 @@ a{color:var(--accent)}
 
   <h2>3. Записать метку</h2>
   <ol>
-    <li>NFC Tools → <i>Write → Add a record → URL/URI</i>, вставить ссылку из пункта 1 целиком, вместе с <code>sms:</code>. Не выбирать тип «SMS», он требует номер.</li>
+    <li>NFC Tools → <i>Писать → Добавить запись → URL / URI личные</i>, вставить ссылку из пункта 1 целиком, вместе с <code>sms:</code>. Обычный «URL / URI» не годится: он приписывает <code>https://</code>, и айфон видит сайт «sms».</li>
     <li id="step2"><i>Add a record → Text</i>, язык <code>ru</code>, вставить текст из пункта 2. Порядок важен: URL первым.</li>
     <li>Нажать <i>Write</i>, приложить метку. Потом <i>Read</i> и убедиться, что обе записи на месте.</li>
   </ol>
@@ -87,8 +98,8 @@ a{color:var(--accent)}
   function hex(n){ return (n<16?'0':'')+n.toString(16).toUpperCase(); }
   function len(s){ return enc.encode(s).length; }
   var $ = function(id){ return document.getElementById(id); };
-  var t=$('t'), a=$('a'), cnt=$('cnt'), txt=$('txt');
-  try{ var saved=JSON.parse(localStorage.getItem('haiku-draft2')||'null'); if(saved){ t.value=saved.t||''; a.value=saved.a||''; } }catch(e){}
+  var t=$('t'), a=$('a'), cnt=$('cnt'), txt=$('txt'), fmtsel=$('fmtsel'), num=$('num');
+  try{ var saved=JSON.parse(localStorage.getItem('haiku-draft2')||'null'); if(saved){ t.value=saved.t||''; a.value=saved.a||''; if(saved.f) fmtsel.value=saved.f; num.value=saved.n||''; } }catch(e){}
 
   // размер заголовка NDEF-записи: короткая (payload < 256) или длинная
   function recHead(payload){ return payload < 256 ? 4 : 7; }
@@ -97,7 +108,9 @@ a{color:var(--accent)}
     var text = t.value.replace(/\r/g,'').replace(/\n{2,}/g,'\n').trim(), author = a.value.trim();
     var body = text + (author ? '\n~' + author : '');
     var smsBody = body + (cnt.checked ? '\n\n№ ' + PH : '');
-    var uri = 'sms:?&body=' + encodeURIComponent(smsBody).replace(/%0A/g,'%0A');
+    var q = encodeURIComponent(smsBody), f = fmtsel.value;
+    num.style.display = f==='num' ? '' : 'none';
+    var uri = f==='amp' ? 'sms:&body='+q : f==='num' ? 'sms:'+(num.value.replace(/\s/g,'')||'0')+'?body='+q : f==='qamp' ? 'sms:?&body='+q : 'sms:?body='+q;
     $('sms').textContent = uri;
     $('try').href = uri;
     $('plain').textContent = body;
@@ -120,9 +133,9 @@ a{color:var(--accent)}
     var m = $('meter'), ok = text && total <= LIMIT && page <= 225;
     m.className = 'meter ' + (text ? (ok ? 'good' : 'bad') : '');
     m.textContent = text ? total + ' из ' + LIMIT + ' байт памяти метки' + (ok ? '' : ', не влезает: сократите текст') : 'введите хайку';
-    try{ localStorage.setItem('haiku-draft2', JSON.stringify({t:t.value, a:a.value})); }catch(e){}
+    try{ localStorage.setItem('haiku-draft2', JSON.stringify({t:t.value, a:a.value, f:fmtsel.value, n:num.value})); }catch(e){}
   }
-  [t,a,cnt,txt].forEach(function(el){ el.addEventListener('input', build); });
+  [t,a,cnt,txt,fmtsel,num].forEach(function(el){ el.addEventListener('input', build); el.addEventListener('change', build); });
   function copier(btn, src){ btn.onclick = function(){ var v=$(src).textContent;
     (navigator.clipboard ? navigator.clipboard.writeText(v) : Promise.reject()).then(function(){ var o=btn.textContent; btn.textContent='Скопировано'; setTimeout(function(){ btn.textContent=o; },1500); },
       function(){ window.prompt('Скопируйте', v); }); }; }
